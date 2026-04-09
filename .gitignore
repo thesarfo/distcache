@@ -22,3 +22,7 @@ coverage/
 *.pfx
 *.key
 *.pem
+.claude/
+.cursor/
+.distcache-csharp-plan.html
+*.html
