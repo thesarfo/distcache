@@ -1,5 +1,8 @@
 # DistCache.NET
 
+[![CI](https://github.com/thesarfo/distcache/actions/workflows/ci.yml/badge.svg)](https://github.com/thesarfo/distcache/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/v/DistCache.Core.svg)](https://www.nuget.org/packages/DistCache.Core)
+
 A distributed read-through cache engine 
 
 <!-- in C#, ported from the Go reference implementation. -->

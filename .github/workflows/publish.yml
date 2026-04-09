@@ -1,0 +1,72 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - "v*"
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  publish:
+    name: Pack & Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore DistCache.slnx
+
+      - name: Build (Release)
+        run: dotnet build DistCache.slnx --no-restore --configuration Release -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Test
+        run: dotnet test DistCache.slnx --no-build --configuration Release
+
+      - name: Pack DistCache.Core
+        run: |
+          dotnet pack src/DistCache.Core/DistCache.Core.csproj \
+            --no-build --configuration Release \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./nupkgs
+
+      - name: Pack DistCache.Discovery
+        run: |
+          dotnet pack src/DistCache.Discovery/DistCache.Discovery.csproj \
+            --no-build --configuration Release \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./nupkgs
+
+      - name: Pack DistCache.Admin
+        run: |
+          dotnet pack src/DistCache.Admin/DistCache.Admin.csproj \
+            --no-build --configuration Release \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            --output ./nupkgs
+
+      - name: Push to NuGet.org
+        run: |
+          dotnet nuget push ./nupkgs/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+      - name: Upload packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-${{ steps.version.outputs.VERSION }}
+          path: ./nupkgs/*.nupkg

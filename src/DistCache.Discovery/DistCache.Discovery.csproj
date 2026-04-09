@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\DistCache.Core\DistCache.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <PackageId>DistCache.Discovery</PackageId>
+    <Description>Discovery providers for DistCache.NET: Kubernetes, NATS, DNS SRV, Static, and Standalone cluster topology awareness.</Description>
+    <PackageTags>cache;distributed-cache;kubernetes;nats;dns;discovery;dotnet</PackageTags>
+  </PropertyGroup>
+
+</Project>
