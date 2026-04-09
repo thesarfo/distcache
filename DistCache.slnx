@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/DistCache.Benchmarks/DistCache.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/DistCache.Admin/DistCache.Admin.csproj" />
+    <Project Path="src/DistCache.Core/DistCache.Core.csproj" />
+    <Project Path="src/DistCache.Discovery/DistCache.Discovery.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DistCache.Tests/DistCache.Tests.csproj" />
+  </Folder>
+</Solution>
