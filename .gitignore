@@ -1,0 +1,24 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.nupkg
+*.snupkg
+packages/
+TestResults/
+BenchmarkDotNet.Artifacts/
+coverage/
+*.log
+
+## Rider / VS Code / VS
+.idea/
+.vscode/
+*.DS_Store
+
+## Environment
+.env
+*.pfx
+*.key
+*.pem
