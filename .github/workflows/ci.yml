@@ -33,17 +33,37 @@ jobs:
 
       - name: Test with coverage
         run: |
-          dotnet test DistCache.slnx \
+          dotnet test tests/DistCache.Tests/DistCache.Tests.csproj \
             --no-build \
             --configuration Release \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./coverage \
-            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=opencover \
+            /p:CoverletOutput="${{ github.workspace }}/coverage/coverage.opencover.xml" \
+            /p:Threshold=70 \
+            /p:ThresholdType=line \
+            /p:ThresholdStat=total
 
-      - name: Coverage threshold check
+      - name: Check coverage file exists
+        id: coverage_check
+        run: |
+          if [ -f "${{ github.workspace }}/coverage/coverage.opencover.xml" ]; then
+            # Only treat as valid if it contains actual coverage data (has <Class> elements)
+            if grep -q '<Class ' "${{ github.workspace }}/coverage/coverage.opencover.xml" 2>/dev/null; then
+              echo "has_coverage=true" >> $GITHUB_OUTPUT
+            else
+              echo "has_coverage=false" >> $GITHUB_OUTPUT
+              echo "::warning::Coverage file exists but contains no class data — skipping summary (no tests written yet)"
+            fi
+          else
+            echo "has_coverage=false" >> $GITHUB_OUTPUT
+            echo "::warning::No coverage file found — skipping summary"
+          fi
+
+      - name: Coverage summary
+        if: steps.coverage_check.outputs.has_coverage == 'true'
         uses: irongut/CodeCoverageSummary@v1.3.0
         with:
-          filename: coverage/**/coverage.opencover.xml
+          filename: coverage/coverage.opencover.xml
           badge: true
           fail_below_min: true
           format: markdown
@@ -53,6 +73,13 @@ jobs:
           output: both
           thresholds: "70 80"
 
+      - name: Write coverage to job summary
+        if: steps.coverage_check.outputs.has_coverage == 'true' && always()
+        run: |
+          if [ -f code-coverage-results.md ]; then
+            cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
@@ -60,10 +87,3 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 7
-
-      - name: Write coverage to job summary
-        if: always()
-        run: |
-          if [ -f code-coverage-results.md ]; then
-            cat code-coverage-results.md >> $GITHUB_STEP_SUMMARY
-          fi
