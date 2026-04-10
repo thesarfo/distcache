@@ -67,6 +67,7 @@ public sealed class CoreContractsTests
         options.Ttl.Should().Be(TimeSpan.FromHours(1));
         options.DataSource.Should().BeSameAs(dataSource);
         options.WarmKeys.Should().Equal(warm);
+        options.SweepInterval.Should().BeNull();
 
         var standalone = new StandaloneConfig("0.0.0.0:9000", "advertised:9000", "solo-peer");
         var engine = new EngineConfig(128, new[] { options }, standalone);
