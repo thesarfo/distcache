@@ -24,6 +24,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="NSubstitute" Version="5.1.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -32,6 +33,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DistCache.Core\DistCache.Core.csproj" />
+    <ProjectReference Include="..\..\src\DistCache.Admin\DistCache.Admin.csproj" />
     <ProjectReference Include="..\..\src\DistCache.Discovery\DistCache.Discovery.csproj" />
   </ItemGroup>
 

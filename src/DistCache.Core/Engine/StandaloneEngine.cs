@@ -7,12 +7,14 @@ namespace DistCache.Core.Engine;
 
 /// <summary>
 /// Single-node implementation of <see cref="IDistCacheEngine"/> using in-memory LRUs and read-through loading from each key space's <see cref="IKeySpace.DataSource"/>.
+/// Also implements <see cref="ILocalCacheAccess"/> so the gRPC peer server can read/write the local LRU
+/// directly without triggering read-through.
 /// </summary>
 /// <remarks>
 /// Concurrent misses on the same key may invoke <see cref="IDataSource.FetchAsync"/> more than once (no request coalescing).
 /// Call <see cref="DisposeAsync"/> to unregister all key spaces and dispose local caches (including background TTL sweepers).
 /// </remarks>
-public sealed class StandaloneEngine : IDistCacheEngine, IAsyncDisposable
+public sealed class StandaloneEngine : IDistCacheEngine, ILocalCacheAccess, IAsyncDisposable
 {
     private readonly KeySpaceRegistry registry = new();
     private bool disposed;
@@ -224,6 +226,41 @@ public sealed class StandaloneEngine : IDistCacheEngine, IAsyncDisposable
 
         await registry.DisposeAllAsync().ConfigureAwait(false);
         disposed = true;
+    }
+
+    // ── ILocalCacheAccess (explicit) ──────────────────────────────────────
+
+    /// <inheritdoc />
+    bool ILocalCacheAccess.TryGetLocal(string keySpaceName, string key, out byte[] value)
+    {
+        if (!registry.TryGet(keySpaceName, out KeySpaceEntry? entry))
+        {
+            value = null!;
+            return false;
+        }
+
+        return entry.TryGetLocal(key, out value!);
+    }
+
+    /// <inheritdoc />
+    void ILocalCacheAccess.PutLocal(string keySpaceName, string key, byte[] value)
+    {
+        if (registry.TryGet(keySpaceName, out KeySpaceEntry? entry))
+        {
+            entry.PutLocal(key, value);
+        }
+    }
+
+    /// <inheritdoc />
+    bool ILocalCacheAccess.RemoveLocal(string keySpaceName, string key)
+    {
+        if (!registry.TryGet(keySpaceName, out KeySpaceEntry? entry))
+        {
+            return false;
+        }
+
+        entry.RemoveLocal(key);
+        return true;
     }
 
     private void ThrowIfDisposed()
