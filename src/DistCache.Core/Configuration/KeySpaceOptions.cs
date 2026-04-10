@@ -14,10 +14,15 @@ namespace DistCache.Core;
 /// Interval between background passes that remove expired entries for this key space, or <see langword="null"/> to disable periodic sweeps
 /// (expiry is still enforced on reads). Must be positive when set.
 /// </param>
+/// <remarks>
+/// Implements <see cref="IKeySpace"/> for engine and registry use.
+/// When <see cref="MaxBytes"/> is <see langword="null"/>, local LRU stores use <see cref="long.MaxValue"/> as the byte budget (no practical cap).
+/// </remarks>
 public sealed record KeySpaceOptions(
     string Name,
     long? MaxBytes,
     TimeSpan? Ttl,
     IDataSource DataSource,
     IReadOnlyList<string> WarmKeys,
-    TimeSpan? SweepInterval = null);
+    TimeSpan? SweepInterval = null)
+    : IKeySpace;
