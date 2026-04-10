@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Configuration;
 
 /// <summary>
 /// Settings for a single-node (non-cluster) deployment: local listen address and how this node advertises itself.

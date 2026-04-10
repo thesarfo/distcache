@@ -1,4 +1,8 @@
 using DistCache.Core;
+using DistCache.Core.Abstractions;
+using DistCache.Core.Configuration;
+using DistCache.Core.Engine;
+using DistCache.Core.Models;
 using FluentAssertions;
 using NSubstitute;
 

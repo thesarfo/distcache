@@ -1,6 +1,9 @@
+using DistCache.Core.Abstractions;
+using DistCache.Core.Configuration;
+using DistCache.Core.Models;
 using DistCache.Core.Registry;
 
-namespace DistCache.Core;
+namespace DistCache.Core.Engine;
 
 /// <summary>
 /// Single-node implementation of <see cref="IDistCacheEngine"/> using in-memory LRUs and read-through loading from each key space's <see cref="IKeySpace.DataSource"/>.

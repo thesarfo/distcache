@@ -52,11 +52,11 @@ jobs:
               echo "has_coverage=true" >> $GITHUB_OUTPUT
             else
               echo "has_coverage=false" >> $GITHUB_OUTPUT
-              echo "::warning::Coverage file exists but contains no class data — skipping summary (no tests written yet)"
+              echo "::warning::Coverage file exists but contains no class data, skipping summary (no tests written yet)"
             fi
           else
             echo "has_coverage=false" >> $GITHUB_OUTPUT
-            echo "::warning::No coverage file found — skipping summary"
+            echo "::warning::No coverage file found, skipping summary"
           fi
 
       - name: Coverage summary

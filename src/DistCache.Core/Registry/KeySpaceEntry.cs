@@ -1,4 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
+using DistCache.Core.Abstractions;
+using DistCache.Core.Configuration;
+using DistCache.Core.Lru;
 
 namespace DistCache.Core.Registry;
 

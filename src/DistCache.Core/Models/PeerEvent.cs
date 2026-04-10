@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Models;
 
 /// <summary>
 /// Describes whether a peer joined or left the cluster view.

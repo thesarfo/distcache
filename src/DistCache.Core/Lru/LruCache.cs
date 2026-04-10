@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
-namespace DistCache.Core;
+namespace DistCache.Core.Lru;
 
 /// <summary>
 /// Thread-safe least-recently-used cache bounded by total value bytes, with optional per-entry time-to-live and background expiry sweeps.

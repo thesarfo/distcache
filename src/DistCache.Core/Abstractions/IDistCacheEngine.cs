@@ -1,4 +1,7 @@
-namespace DistCache.Core;
+using DistCache.Core.Configuration;
+using DistCache.Core.Models;
+
+namespace DistCache.Core.Abstractions;
 
 /// <summary>
 /// Distributed cache engine: read-through gets, writes, deletes, and live key space management.

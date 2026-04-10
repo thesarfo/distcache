@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Models;
 
 /// <summary>
 /// Outcome of a single-key cache read.
