@@ -29,4 +29,9 @@ public interface IKeySpace
     /// Gets keys that were requested to be warmed for this key space.
     /// </summary>
     IReadOnlyList<string> WarmKeys { get; }
+
+    /// <summary>
+    /// Gets the interval between background sweeps that remove expired entries, or <see langword="null"/> when periodic sweeps are disabled.
+    /// </summary>
+    TimeSpan? SweepInterval { get; }
 }
