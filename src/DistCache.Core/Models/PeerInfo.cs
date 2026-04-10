@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Models;
 
 /// <summary>
 /// Identifies a peer in the cluster for routing and topology updates.

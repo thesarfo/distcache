@@ -1,4 +1,6 @@
-namespace DistCache.Core;
+using DistCache.Core.Abstractions;
+
+namespace DistCache.Core.Configuration;
 
 /// <summary>
 /// Configuration for registering or updating a key space: TTL, size limits, backing data source, and optional warm keys.

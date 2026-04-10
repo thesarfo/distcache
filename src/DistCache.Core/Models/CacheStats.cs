@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Models;
 
 /// <summary>
 /// Aggregate statistics for a cache region or the engine, suitable for metrics and admin surfaces.

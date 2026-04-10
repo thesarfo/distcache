@@ -1,4 +1,5 @@
 using DistCache.Core;
+using DistCache.Core.Lru;
 using FluentAssertions;
 
 namespace DistCache.Tests;

@@ -1,4 +1,6 @@
-namespace DistCache.Core;
+using DistCache.Core.Models;
+
+namespace DistCache.Core.Abstractions;
 
 /// <summary>
 /// Discovers cluster peers and exposes a stream of join/leave events for topology-aware routing.

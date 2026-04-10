@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Abstractions;
 
 /// <summary>
 /// Describes a registered cache partition: limits, TTL, backing data source, and keys warmed at startup or after updates.

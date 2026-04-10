@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using DistCache.Core.Abstractions;
+using DistCache.Core.Configuration;
 
 namespace DistCache.Core.Registry;
 

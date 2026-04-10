@@ -6,7 +6,7 @@
 
   <PropertyGroup>
     <PackageId>DistCache.Admin</PackageId>
-    <Description>Admin HTTP endpoints and diagnostics for DistCache.NET — exposes peer state, keyspace stats, and hot-key data.</Description>
+    <Description>Admin HTTP endpoints and diagnostics for DistCache.NET, exposes peer state, keyspace stats, and hot-key data.</Description>
     <PackageTags>cache;distributed-cache;admin;diagnostics;dotnet</PackageTags>
   </PropertyGroup>
 

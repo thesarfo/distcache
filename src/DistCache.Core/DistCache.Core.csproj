@@ -3,8 +3,22 @@
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>DistCache.Core</PackageId>
-    <Description>Core engine, interfaces, and LRU cache implementation for DistCache.NET — a distributed read-through cache for .NET 8.</Description>
+    <Description>Core engine, interfaces, and LRU cache implementation for DistCache.NET, a distributed read-through cache for .NET 8.</Description>
     <PackageTags>cache;distributed-cache;lru;read-through;dotnet</PackageTags>
   </PropertyGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.29.3" />
+    <PackageReference Include="Grpc.Core.Api" Version="2.67.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.67.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="Proto\cache.proto" GrpcServices="Both" />
+  </ItemGroup>
 
 </Project>

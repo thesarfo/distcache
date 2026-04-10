@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Abstractions;
 
 /// <summary>
 /// Fetches cache values from a backing store for read-through loading when a key is missing from the distributed cache.

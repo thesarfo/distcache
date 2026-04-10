@@ -1,4 +1,4 @@
-namespace DistCache.Core;
+namespace DistCache.Core.Configuration;
 
 /// <summary>
 /// Top-level engine configuration: hashing topology, key space definitions, and optional standalone host settings.
