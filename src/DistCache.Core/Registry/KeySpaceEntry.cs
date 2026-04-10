@@ -80,6 +80,21 @@ public sealed class KeySpaceEntry
     }
 
     /// <summary>
+    /// Removes a key from the local LRU if present.
+    /// </summary>
+    /// <param name="key">Cache key.</param>
+    /// <returns><see langword="true"/> if an entry was removed.</returns>
+    public bool RemoveLocal(string key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        lock (gate)
+        {
+            ThrowIfDisposed();
+            return cache!.Remove(key);
+        }
+    }
+
+    /// <summary>
     /// Disposes the local LRU and marks this entry as unusable.
     /// </summary>
     /// <returns>A task that completes when disposal finishes.</returns>

@@ -75,6 +75,43 @@ public sealed class KeySpaceRegistry
         entry.ApplyUpdate(options);
     }
 
+    /// <summary>
+    /// Returns a snapshot of registered key space names. Order is not specified.
+    /// </summary>
+    /// <returns>All current names.</returns>
+    public IReadOnlyCollection<string> GetNames()
+    {
+        return entries.Keys.ToArray();
+    }
+
+    /// <summary>
+    /// Returns a snapshot of key space definitions. Order is not specified.
+    /// </summary>
+    /// <returns>Current <see cref="IKeySpace"/> instances for each entry.</returns>
+    public IReadOnlyCollection<IKeySpace> GetDefinitions()
+    {
+        List<IKeySpace> list = new(entries.Count);
+        foreach (KeySpaceEntry entry in entries.Values)
+        {
+            list.Add(entry.Definition);
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// Unregisters every key space and disposes all local caches (stops TTL sweep timers).
+    /// </summary>
+    /// <returns>A task that completes when all entries are disposed.</returns>
+    public async ValueTask DisposeAllAsync()
+    {
+        string[] names = entries.Keys.ToArray();
+        foreach (string name in names)
+        {
+            await UnregisterAsync(name).ConfigureAwait(false);
+        }
+    }
+
     private static void ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
