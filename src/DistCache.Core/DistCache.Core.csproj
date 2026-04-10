@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>DistCache.Core</PackageId>
     <Description>Core engine, interfaces, and LRU cache implementation for DistCache.NET — a distributed read-through cache for .NET 8.</Description>
     <PackageTags>cache;distributed-cache;lru;read-through;dotnet</PackageTags>
