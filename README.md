@@ -9,7 +9,7 @@ A distributed read-through cache engine
 
 ## Overview
 
-DistCache.NET is a high-performance, distributed caching library for .NET 8 that provides:
+DistCache.NET is a high-performance, distributed caching library for .NET that provides:
 
 - **Read-Through Cache**, automatic fetch from your `IDataSource` on miss, no miss handling in application code
 - **Consistent Hashing**, data partitioned across nodes with virtual nodes; automatic rebalancing on topology change
