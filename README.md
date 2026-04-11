@@ -1,6 +1,7 @@
 # DistCache.NET
 
 [![CI](https://github.com/thesarfo/distcache/actions/workflows/ci.yml/badge.svg)](https://github.com/thesarfo/distcache/actions/workflows/ci.yml)
+<!-- [![codecov](https://codecov.io/gh/thesarfo/distcache/graph/badge.svg)](https://codecov.io/gh/thesarfo/distcache) -->
 [![NuGet](https://img.shields.io/nuget/v/DistCache.Core.svg)](https://www.nuget.org/packages/DistCache.Core)
 
 A distributed read-through cache engine 
@@ -9,7 +10,7 @@ A distributed read-through cache engine
 
 ## Overview
 
-DistCache.NET is a high-performance, distributed caching library for .NET 8 that provides:
+DistCache.NET is a high-performance, distributed caching library for .NET that provides:
 
 - **Read-Through Cache**, automatic fetch from your `IDataSource` on miss, no miss handling in application code
 - **Consistent Hashing**, data partitioned across nodes with virtual nodes; automatic rebalancing on topology change

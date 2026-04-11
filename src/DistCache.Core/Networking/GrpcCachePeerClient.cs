@@ -1,3 +1,6 @@
+using System.Net.Security;
+using System.Security.Cryptography.X509Certificates;
+using DistCache.Core.Configuration;
 using DistCache.Core.Exceptions;
 using DistCache.Core.Proto;
 using Google.Protobuf;
@@ -8,7 +11,8 @@ namespace DistCache.Core.Networking;
 
 /// <summary>
 /// <see cref="ICachePeerClient"/> implementation backed by a gRPC channel.
-/// Use <see cref="Create(string)"/> or <see cref="Create(Uri, HttpClient)"/> to construct instances.
+/// Use <see cref="Create(string)"/>, <see cref="Create(Uri, HttpClient)"/>, or
+/// <see cref="Create(string, TlsOptions)"/> to construct instances.
 /// </summary>
 public sealed class GrpcCachePeerClient : ICachePeerClient
 {
@@ -36,6 +40,50 @@ public sealed class GrpcCachePeerClient : ICachePeerClient
     /// <returns>A new <see cref="GrpcCachePeerClient"/> backed by the supplied client.</returns>
     public static GrpcCachePeerClient Create(Uri address, HttpClient httpClient)
         => new(GrpcChannel.ForAddress(address, new GrpcChannelOptions { HttpClient = httpClient }));
+
+    /// <summary>
+    /// Creates a client that connects to <paramref name="endpoint"/> with mutual TLS.
+    /// The client presents its node certificate to the server and validates the server certificate
+    /// against the trusted CA in <paramref name="clientTls"/>.
+    /// When <see cref="TlsOptions.AllowInsecure"/> is <see langword="true"/>, server certificate
+    /// validation is skipped (development/test use only).
+    /// </summary>
+    /// <param name="endpoint">The peer's gRPC endpoint address (e.g. "https://peer:5001").</param>
+    /// <param name="clientTls">TLS configuration providing the client certificate and trusted CA.</param>
+    /// <returns>A new <see cref="GrpcCachePeerClient"/> configured for mTLS.</returns>
+    public static GrpcCachePeerClient Create(string endpoint, TlsOptions clientTls)
+    {
+        ArgumentNullException.ThrowIfNull(clientTls);
+
+        X509Certificate2? nodeCert = clientTls.ResolveNodeCertificate();
+        X509Certificate2? trustedCa = clientTls.ResolveTrustedCa();
+
+        // SocketsHttpHandler is the managed HTTP/2-capable handler, required for gRPC over TLS.
+        // HttpClientHandler on Windows uses WinHTTP which has limited HTTP/2 + custom TLS support.
+        var handler = new SocketsHttpHandler();
+
+        var sslOptions = new SslClientAuthenticationOptions();
+
+        if (nodeCert is not null)
+        {
+            sslOptions.ClientCertificates = [nodeCert];
+        }
+
+        if (clientTls.AllowInsecure)
+        {
+            sslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        }
+        else if (trustedCa is not null)
+        {
+            sslOptions.RemoteCertificateValidationCallback = (_, serverCert, _, _) =>
+                serverCert is X509Certificate2 cert && ValidateServerCert(cert, trustedCa);
+        }
+
+        handler.SslOptions = sslOptions;
+
+        return new GrpcCachePeerClient(
+            GrpcChannel.ForAddress(endpoint, new GrpcChannelOptions { HttpHandler = handler }));
+    }
 
     /// <inheritdoc />
     public async Task<(bool Found, ReadOnlyMemory<byte> Value)> GetAsync(
@@ -152,4 +200,13 @@ public sealed class GrpcCachePeerClient : ICachePeerClient
 
     /// <inheritdoc />
     public void Dispose() => channel.Dispose();
+
+    private static bool ValidateServerCert(X509Certificate2 cert, X509Certificate2 trustedCa)
+    {
+        using var chain = new X509Chain();
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Add(trustedCa);
+        return chain.Build(cert);
+    }
 }
