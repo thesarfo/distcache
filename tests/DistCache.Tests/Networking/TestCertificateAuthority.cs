@@ -5,7 +5,7 @@ namespace DistCache.Tests.Networking;
 
 /// <summary>
 /// Generates ephemeral in-memory X.509 certificates for integration tests.
-/// All certificates are ECDSA P-256, valid for 366 days, and never touch the OS certificate store.
+/// All certificates are ECDSA P-256, valid for 365 days, and never touch the OS certificate store.
 /// </summary>
 internal static class TestCertificateAuthority
 {
@@ -22,7 +22,7 @@ internal static class TestCertificateAuthority
 
         X509Certificate2 cert = req.CreateSelfSigned(
             DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(366));
+            DateTimeOffset.UtcNow.AddDays(365));
 
         return RoundTrip(cert);
     }
@@ -53,24 +53,23 @@ internal static class TestCertificateAuthority
         byte[] serial = new byte[16];
         RandomNumberGenerator.Fill(serial);
 
+        // Node cert validity is 2 days shorter than the CA so notAfter < ca.NotAfter.
         X509Certificate2 signed = req.Create(
             ca,
             DateTimeOffset.UtcNow.AddDays(-1),
-            DateTimeOffset.UtcNow.AddDays(366),
+            DateTimeOffset.UtcNow.AddDays(363),
             serial);
 
-        // CopyWithPrivateKey returns a cert without a key store — RoundTrip fixes that.
+        // CopyWithPrivateKey returns a cert without a key store, RoundTrip fixes that.
         return RoundTrip(signed.CopyWithPrivateKey(key));
     }
 
-    // PFX round-trip ensures the private key is properly associated with the certificate
-    // on all platforms (avoids platform-specific issues with ephemeral keys on Windows).
+    // PFX round-trip without EphemeralKeySet so that Windows SChannel can access the
+    // private key via CNG. EphemeralKeySet keys are not reachable from kernel-mode
+    // SChannel on some Windows configurations, causing Kestrel TLS handshakes to fail.
     private static X509Certificate2 RoundTrip(X509Certificate2 cert)
     {
         byte[] pfx = cert.Export(X509ContentType.Pfx, "test");
-        return new X509Certificate2(
-            pfx,
-            "test",
-            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.EphemeralKeySet);
+        return new X509Certificate2(pfx, "test", X509KeyStorageFlags.Exportable);
     }
 }

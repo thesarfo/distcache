@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using DistCache.Core.Configuration;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 
 namespace DistCache.Admin.Extensions;
@@ -11,19 +12,66 @@ namespace DistCache.Admin.Extensions;
 public static class MtlsKestrelExtensions
 {
     /// <summary>
-    /// Configures Kestrel's HTTPS defaults to use the node certificate from <paramref name="options"/>
-    /// and to require a client certificate validated against the configured trusted CA.
-    /// When <see cref="TlsOptions.AllowInsecure"/> is <see langword="true"/>, client certificates
-    /// are not required and server certificate validation is skipped on the client side.
+    /// Configures a Kestrel listen endpoint to use mutual TLS.
+    /// The node certificate from <paramref name="options"/> is presented to connecting clients.
+    /// When <see cref="TlsOptions.AllowInsecure"/> is <see langword="false"/>, a client certificate
+    /// is required and validated against the configured trusted CA.
+    /// </summary>
+    /// <param name="listenOptions">The endpoint listen options to configure.</param>
+    /// <param name="options">TLS configuration including the node certificate and trusted CA.</param>
+    /// <returns>The same <paramref name="listenOptions"/> for chaining.</returns>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="listenOptions"/> or <paramref name="options"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when <see cref="TlsOptions.AllowInsecure"/> is <see langword="false"/> and no node
+    /// certificate is configured.
+    /// </exception>
+    public static ListenOptions UseCachePeerMtls(this ListenOptions listenOptions, TlsOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(listenOptions);
+        ArgumentNullException.ThrowIfNull(options);
+
+        X509Certificate2? nodeCert = options.ResolveNodeCertificate();
+
+        if (!options.AllowInsecure && nodeCert is null)
+        {
+            throw new InvalidOperationException(
+                "TlsOptions: a node certificate is required when AllowInsecure is false. " +
+                "Set TlsOptions.NodeCertificate or TlsOptions.CertificatePath.");
+        }
+
+        return listenOptions.UseHttps(https =>
+        {
+            if (nodeCert is not null)
+            {
+                https.ServerCertificate = nodeCert;
+            }
+
+            if (!options.AllowInsecure)
+            {
+                https.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
+                https.ClientCertificateValidation = (cert, _, _) =>
+                    ValidateAgainstTrustedCa(cert, options.ResolveTrustedCa());
+            }
+            else
+            {
+                https.ClientCertificateMode = ClientCertificateMode.NoCertificate;
+            }
+        });
+    }
+
+    /// <summary>
+    /// Configures Kestrel's HTTPS defaults to use mutual TLS for all endpoints that call
+    /// <c>UseHttps()</c> without an explicit certificate.
     /// </summary>
     /// <param name="builder">The web host builder to configure.</param>
     /// <param name="options">TLS configuration including the node certificate and trusted CA.</param>
     /// <returns>The same <paramref name="builder"/> for chaining.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when <see cref="TlsOptions.AllowInsecure"/> is <see langword="false"/> and no server
-    /// certificate is configured.
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="builder"/> or <paramref name="options"/> is <see langword="null"/>.
     /// </exception>
-    public static IWebHostBuilder UseCachePeerMtls(this IWebHostBuilder builder, TlsOptions options)
+    public static IWebHostBuilder UseCachePeerMtlsDefaults(this IWebHostBuilder builder, TlsOptions options)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(options);
@@ -34,24 +82,26 @@ public static class MtlsKestrelExtensions
             {
                 X509Certificate2? nodeCert = options.ResolveNodeCertificate();
 
+                if (!options.AllowInsecure && nodeCert is null)
+                {
+                    throw new InvalidOperationException(
+                        "TlsOptions: a node certificate is required when AllowInsecure is false. " +
+                        "Set TlsOptions.NodeCertificate or TlsOptions.CertificatePath.");
+                }
+
+                if (nodeCert is not null)
+                {
+                    https.ServerCertificate = nodeCert;
+                }
+
                 if (!options.AllowInsecure)
                 {
-                    if (nodeCert is null)
-                    {
-                        throw new InvalidOperationException(
-                            "TlsOptions: a node certificate is required when AllowInsecure is false. " +
-                            "Set TlsOptions.NodeCertificate or TlsOptions.CertificatePath.");
-                    }
-
-                    https.ServerCertificate = nodeCert;
                     https.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
                     https.ClientCertificateValidation = (cert, _, _) =>
                         ValidateAgainstTrustedCa(cert, options.ResolveTrustedCa());
                 }
-                else if (nodeCert is not null)
+                else
                 {
-                    // Insecure mode: still present a cert if one was provided, but don't require the client to.
-                    https.ServerCertificate = nodeCert;
                     https.ClientCertificateMode = ClientCertificateMode.NoCertificate;
                 }
             });
@@ -62,7 +112,7 @@ public static class MtlsKestrelExtensions
     {
         if (trustedCa is null)
         {
-            // No CA pinned — accept any structurally valid cert.
+            // No CA pinned, accept any structurally valid cert.
             return true;
         }
 

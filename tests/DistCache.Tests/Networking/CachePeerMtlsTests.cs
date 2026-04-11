@@ -7,8 +7,9 @@ using DistCache.Core.Engine;
 using DistCache.Core.Exceptions;
 using DistCache.Core.Networking;
 using FluentAssertions;
-using Grpc.Core;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -17,7 +18,7 @@ namespace DistCache.Tests.Networking;
 /// <summary>
 /// Integration tests verifying mutual TLS between cache nodes.
 /// Each test spins up a real Kestrel server on port 0 (OS-assigned) so the full TLS
-/// handshake is exercised — <see cref="Microsoft.AspNetCore.TestHost.TestServer"/> bypasses TLS
+/// handshake is exercised, <see cref="Microsoft.AspNetCore.TestHost.TestServer"/> bypasses TLS
 /// and cannot be used here.
 /// </summary>
 public sealed class CachePeerMtlsTests
@@ -30,7 +31,7 @@ public sealed class CachePeerMtlsTests
         DataSource: NullDataSource.Instance,
         WarmKeys: []);
 
-    // One CA and two node certs shared across all tests (generated once per test class instance).
+    // One CA and one node cert shared across all tests in this instance.
     private readonly X509Certificate2 _trustedCa;
     private readonly X509Certificate2 _nodeCert;
 
@@ -40,7 +41,6 @@ public sealed class CachePeerMtlsTests
         _nodeCert = TestCertificateAuthority.IssueNode(_trustedCa, "distcache-test-node");
     }
 
-    // ── Happy path ────────────────────────────────────────────────────────
 
     [Fact]
     public async Task MtlsHandshake_with_valid_client_cert_succeeds()
@@ -51,7 +51,7 @@ public sealed class CachePeerMtlsTests
             TrustedCaCertificate = _trustedCa,
         };
 
-        using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
+        await using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
         (WebApplication node, string address) = await StartMtlsNode(tls, engine);
 
         using GrpcCachePeerClient client = GrpcCachePeerClient.Create(address, tls);
@@ -64,10 +64,9 @@ public sealed class CachePeerMtlsTests
         value.ToArray().Should().Equal(payload);
 
         await node.StopAsync();
-        await engine.DisposeAsync();
     }
 
-    // ── Rejection: missing client cert ────────────────────────────────────
+
 
     [Fact]
     public async Task Missing_client_cert_is_rejected()
@@ -78,16 +77,11 @@ public sealed class CachePeerMtlsTests
             TrustedCaCertificate = _trustedCa,
         };
 
-        using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
+        await using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
         (WebApplication node, string address) = await StartMtlsNode(serverTls, engine);
 
-        // Client presents no certificate — only trusts the server's CA.
-        TlsOptions clientTls = new()
-        {
-            TrustedCaCertificate = _trustedCa,
-            // No NodeCertificate → no client cert presented
-        };
-
+        // Client presents no certificate, only trusts the server CA.
+        TlsOptions clientTls = new() { TrustedCaCertificate = _trustedCa };
         using GrpcCachePeerClient client = GrpcCachePeerClient.Create(address, clientTls);
 
         Func<Task> act = () => client.GetAsync(KeySpace, "k");
@@ -95,10 +89,8 @@ public sealed class CachePeerMtlsTests
         await act.Should().ThrowAsync<CacheException>();
 
         await node.StopAsync();
-        await engine.DisposeAsync();
     }
 
-    // ── Rejection: client cert from wrong CA ──────────────────────────────
 
     [Fact]
     public async Task Client_cert_from_wrong_CA_is_rejected()
@@ -109,17 +101,16 @@ public sealed class CachePeerMtlsTests
             TrustedCaCertificate = _trustedCa,
         };
 
-        using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
+        await using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
         (WebApplication node, string address) = await StartMtlsNode(serverTls, engine);
 
-        // Different CA and cert — the server's trusted-CA won't accept it.
-        X509Certificate2 rogue = TestCertificateAuthority.IssueNode(
-            TestCertificateAuthority.CreateCa(),
-            "rogue-node");
+        // Cert issued by a completely different CA, server's trust store won't accept it.
+        X509Certificate2 rogueCert = TestCertificateAuthority.IssueNode(
+            TestCertificateAuthority.CreateCa(), "rogue-node");
 
         TlsOptions clientTls = new()
         {
-            NodeCertificate = rogue,
+            NodeCertificate = rogueCert,
             TrustedCaCertificate = _trustedCa,
         };
 
@@ -130,24 +121,24 @@ public sealed class CachePeerMtlsTests
         await act.Should().ThrowAsync<CacheException>();
 
         await node.StopAsync();
-        await engine.DisposeAsync();
     }
 
-    // ── Dev mode: AllowInsecure bypasses cert requirements ────────────────
+
 
     [Fact]
     public async Task AllowInsecure_flag_bypasses_cert_validation()
     {
+        // Server presents a cert but does not require one from the client.
         TlsOptions serverTls = new()
         {
             NodeCertificate = _nodeCert,
             AllowInsecure = true,
         };
 
-        using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
+        await using StandaloneEngine engine = new(new EngineConfig(null, [Options]));
         (WebApplication node, string address) = await StartMtlsNode(serverTls, engine);
 
-        // Client also skips server cert validation (self-signed in insecure mode).
+        // Client skips server cert validation entirely.
         TlsOptions clientTls = new() { AllowInsecure = true };
         using GrpcCachePeerClient client = GrpcCachePeerClient.Create(address, clientTls);
 
@@ -159,10 +150,9 @@ public sealed class CachePeerMtlsTests
         value.ToArray().Should().Equal(payload);
 
         await node.StopAsync();
-        await engine.DisposeAsync();
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────
+
 
     private static async Task<(WebApplication App, string Address)> StartMtlsNode(
         TlsOptions serverTls,
@@ -170,9 +160,13 @@ public sealed class CachePeerMtlsTests
     {
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
 
-        // Bind on a random OS-assigned port on the loopback interface.
-        builder.WebHost.UseKestrel(k => k.ListenLocalhost(0, lo => lo.UseHttps()));
-        builder.WebHost.UseCachePeerMtls(serverTls);
+        // Bind on a Kestrel-managed HTTPS/HTTP2 endpoint on a random OS-assigned port.
+        builder.WebHost.ConfigureKestrel(k =>
+            k.Listen(System.Net.IPAddress.Loopback, 0, lo =>
+            {
+                lo.Protocols = Microsoft.AspNetCore.Server.Kestrel.Core.HttpProtocols.Http2;
+                lo.UseCachePeerMtls(serverTls);
+            }));
 
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<ILocalCacheAccess>(engine);
@@ -181,16 +175,15 @@ public sealed class CachePeerMtlsTests
         app.MapGrpcService<CachePeerServer>();
         await app.StartAsync();
 
-        // Read the actual bound address (port 0 → OS-assigned port).
-        IServerAddressesFeature? feature =
-            app.Services.GetRequiredService<IServerAddressesFeature>();
-        string address = feature?.Addresses.First()
+        
+        IServer server = app.Services.GetRequiredService<IServer>();
+        IServerAddressesFeature? addressFeature = server.Features.Get<IServerAddressesFeature>();
+        string address = addressFeature?.Addresses.First()
             ?? throw new InvalidOperationException("Could not determine server address after start.");
 
         return (app, address);
     }
 
-    // ── No-op data source ─────────────────────────────────────────────────
 
     private sealed class NullDataSource : IDataSource
     {

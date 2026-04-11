@@ -1,3 +1,4 @@
+using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using DistCache.Core.Configuration;
 using DistCache.Core.Exceptions;
@@ -54,37 +55,34 @@ public sealed class GrpcCachePeerClient : ICachePeerClient
     {
         ArgumentNullException.ThrowIfNull(clientTls);
 
-        var handler = new HttpClientHandler();
-
         X509Certificate2? nodeCert = clientTls.ResolveNodeCertificate();
+        X509Certificate2? trustedCa = clientTls.ResolveTrustedCa();
+
+        // SocketsHttpHandler is the managed HTTP/2-capable handler, required for gRPC over TLS.
+        // HttpClientHandler on Windows uses WinHTTP which has limited HTTP/2 + custom TLS support.
+        var handler = new SocketsHttpHandler();
+
+        var sslOptions = new SslClientAuthenticationOptions();
+
         if (nodeCert is not null)
         {
-            handler.ClientCertificates.Add(nodeCert);
+            sslOptions.ClientCertificates = [nodeCert];
         }
 
-        X509Certificate2? trustedCa = clientTls.ResolveTrustedCa();
         if (clientTls.AllowInsecure)
         {
-            handler.ServerCertificateCustomValidationCallback =
-                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+            sslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
         }
         else if (trustedCa is not null)
         {
-            handler.ServerCertificateCustomValidationCallback = (_, serverCert, _, _) =>
-                serverCert is not null && ValidateServerCert(serverCert, trustedCa);
+            sslOptions.RemoteCertificateValidationCallback = (_, serverCert, _, _) =>
+                serverCert is X509Certificate2 cert && ValidateServerCert(cert, trustedCa);
         }
+
+        handler.SslOptions = sslOptions;
 
         return new GrpcCachePeerClient(
             GrpcChannel.ForAddress(endpoint, new GrpcChannelOptions { HttpHandler = handler }));
-    }
-
-    private static bool ValidateServerCert(X509Certificate2 cert, X509Certificate2 trustedCa)
-    {
-        using var chain = new X509Chain();
-        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-        chain.ChainPolicy.CustomTrustStore.Add(trustedCa);
-        return chain.Build(cert);
     }
 
     /// <inheritdoc />
@@ -202,4 +200,13 @@ public sealed class GrpcCachePeerClient : ICachePeerClient
 
     /// <inheritdoc />
     public void Dispose() => channel.Dispose();
+
+    private static bool ValidateServerCert(X509Certificate2 cert, X509Certificate2 trustedCa)
+    {
+        using var chain = new X509Chain();
+        chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        chain.ChainPolicy.CustomTrustStore.Add(trustedCa);
+        return chain.Build(cert);
+    }
 }
