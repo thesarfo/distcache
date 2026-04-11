@@ -1,7 +1,7 @@
 # DistCache.NET
 
 [![CI](https://github.com/thesarfo/distcache/actions/workflows/ci.yml/badge.svg)](https://github.com/thesarfo/distcache/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/thesarfo/distcache/graph/badge.svg)](https://codecov.io/gh/thesarfo/distcache)
+<!-- [![codecov](https://codecov.io/gh/thesarfo/distcache/graph/badge.svg)](https://codecov.io/gh/thesarfo/distcache) -->
 [![NuGet](https://img.shields.io/nuget/v/DistCache.Core.svg)](https://www.nuget.org/packages/DistCache.Core)
 
 A distributed read-through cache engine 
