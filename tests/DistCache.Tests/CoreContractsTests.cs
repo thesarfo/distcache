@@ -28,12 +28,13 @@ public sealed class CoreContractsTests
     [Fact]
     public void CacheStats_exposes_counters()
     {
-        var stats = new CacheStats(10, 20, 3, 100, 4096);
+        var stats = new CacheStats(10, 20, 3, 100, 4096, 2);
         stats.Hits.Should().Be(10);
         stats.Misses.Should().Be(20);
         stats.Evictions.Should().Be(3);
         stats.EntryCount.Should().Be(100);
         stats.ApproximateBytes.Should().Be(4096);
+        stats.InFlightRequests.Should().Be(2);
     }
 
     [Fact]
