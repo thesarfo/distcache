@@ -11,7 +11,7 @@ namespace DistCache.Core.Networking;
 
 /// <summary>
 /// <see cref="ICachePeerClient"/> implementation backed by a gRPC channel.
-/// Use <see cref="Create(string)"/>, <see cref="Create(Uri, HttpClient)"/>, or
+/// Use <see cref="Create(string)"/>, <see cref="FromChannel(GrpcChannel)"/>, <see cref="Create(Uri, HttpClient)"/>, or
 /// <see cref="Create(string, TlsOptions)"/> to construct instances.
 /// </summary>
 public sealed class GrpcCachePeerClient : ICachePeerClient
@@ -30,6 +30,18 @@ public sealed class GrpcCachePeerClient : ICachePeerClient
     /// <returns>A new <see cref="GrpcCachePeerClient"/> connected to <paramref name="endpoint"/>.</returns>
     public static GrpcCachePeerClient Create(string endpoint)
         => new(GrpcChannel.ForAddress(endpoint));
+
+    /// <summary>
+    /// Creates a client that reuses a pooled or shared <see cref="GrpcChannel"/>.
+    /// The caller is responsible for the channel lifecycle; disposing this client disposes the channel.
+    /// </summary>
+    /// <param name="channel">gRPC channel to the peer.</param>
+    /// <returns>A client for <paramref name="channel"/>.</returns>
+    public static GrpcCachePeerClient FromChannel(GrpcChannel channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+        return new GrpcCachePeerClient(channel);
+    }
 
     /// <summary>
     /// Creates a client using an existing <paramref name="httpClient"/>, intended for in-process tests

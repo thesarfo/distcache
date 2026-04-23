@@ -8,9 +8,14 @@ namespace DistCache.Core.Models;
 /// <param name="Evictions">Number of entries removed due to capacity or TTL policy.</param>
 /// <param name="EntryCount">Approximate number of entries currently held.</param>
 /// <param name="ApproximateBytes">Approximate total size in bytes of cached values.</param>
+/// <param name="InFlightRequests">
+/// Number of read-through fetches currently in progress (request coalescing in-flight), or zero
+/// when not exposed by the implementation.
+/// </param>
 public readonly record struct CacheStats(
     long Hits,
     long Misses,
     long Evictions,
     long EntryCount,
-    long ApproximateBytes);
+    long ApproximateBytes,
+    long InFlightRequests);

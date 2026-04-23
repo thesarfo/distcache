@@ -1,4 +1,5 @@
 using DistCache.Core.Abstractions;
+using DistCache.Core.Concurrency;
 using DistCache.Core.Configuration;
 using DistCache.Core.Models;
 using DistCache.Core.Registry;
@@ -11,12 +12,17 @@ namespace DistCache.Core.Engine;
 /// directly without triggering read-through.
 /// </summary>
 /// <remarks>
-/// Concurrent misses on the same key may invoke <see cref="IDataSource.FetchAsync"/> more than once (no request coalescing).
+/// Concurrent <see cref="GetAsync(string, string, CancellationToken)"/> calls for the same key space
+/// and key coalesce: only one in-flight <see cref="IDataSource.FetchAsync"/> run populates the local LRU; see
+/// <see cref="GetCacheStats"/>.
 /// Call <see cref="DisposeAsync"/> to unregister all key spaces and dispose local caches (including background TTL sweepers).
 /// </remarks>
 public sealed class StandaloneEngine : IDistCacheEngine, ILocalCacheAccess, IAsyncDisposable
 {
     private readonly KeySpaceRegistry registry = new();
+    private readonly AsyncSingleFlight<(string KeySpace, string Key), ReadThroughCoalesceResult> readThrough = new(
+        EqualityComparer<(string KeySpace, string Key)>.Default);
+
     private bool disposed;
 
     /// <summary>
@@ -44,6 +50,14 @@ public sealed class StandaloneEngine : IDistCacheEngine, ILocalCacheAccess, IAsy
     /// <inheritdoc />
     public IReadOnlyCollection<IKeySpace> KeySpaces => registry.GetDefinitions();
 
+    /// <summary>
+    /// Returns a snapshot of aggregate <see cref="CacheStats"/>. At present only
+    /// <see cref="CacheStats.InFlightRequests"/> is populated; other fields are set to zero until full metrics are added.
+    /// </summary>
+    /// <returns>Snapshot; only <see cref="CacheStats.InFlightRequests"/> is non-zero in this build.</returns>
+    public CacheStats GetCacheStats() =>
+        new(0, 0, 0, 0, 0, readThrough.InFlightCount);
+
     /// <inheritdoc />
     public async ValueTask<CacheResult> GetAsync(string keySpaceName, string key, CancellationToken cancellationToken = default)
     {
@@ -61,16 +75,31 @@ public sealed class StandaloneEngine : IDistCacheEngine, ILocalCacheAccess, IAsy
             return new CacheResult(true, hit!, keySpaceName, key);
         }
 
-        IKeySpace definition = entry.Definition;
-        ReadOnlyMemory<byte>? fetched = await definition.DataSource.FetchAsync(key, cancellationToken).ConfigureAwait(false);
-        if (fetched is null)
+        ReadThroughCoalesceResult coalesced = await readThrough
+            .ExecuteAsync(
+                (keySpaceName, key),
+                async ct =>
+                {
+                    IKeySpace definition = entry.Definition;
+                    ReadOnlyMemory<byte>? fetched = await definition.DataSource.FetchAsync(key, ct).ConfigureAwait(false);
+                    if (fetched is null)
+                    {
+                        return new ReadThroughCoalesceResult(false, null);
+                    }
+
+                    byte[] owned = fetched.Value.ToArray();
+                    entry.PutLocal(key, owned);
+                    return new ReadThroughCoalesceResult(true, owned);
+                },
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!coalesced.Found)
         {
             return new CacheResult(false, default, keySpaceName, key);
         }
 
-        byte[] owned = fetched.Value.ToArray();
-        entry.PutLocal(key, owned);
-        return new CacheResult(true, owned, keySpaceName, key);
+        return new CacheResult(true, coalesced.Value!, keySpaceName, key);
     }
 
     /// <inheritdoc />
@@ -267,4 +296,6 @@ public sealed class StandaloneEngine : IDistCacheEngine, ILocalCacheAccess, IAsy
     {
         ObjectDisposedException.ThrowIf(disposed, this);
     }
+
+    private readonly record struct ReadThroughCoalesceResult(bool Found, byte[]? Value);
 }

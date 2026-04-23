@@ -1,6 +1,9 @@
+using System.Collections.Concurrent;
 using DistCache.Core.Abstractions;
+using DistCache.Core.Configuration;
 using DistCache.Core.Models;
 using DistCache.Core.Networking;
+using Grpc.Net.Client;
 
 namespace DistCache.Core.Routing;
 
@@ -12,7 +15,10 @@ namespace DistCache.Core.Routing;
 public sealed class PeerManager : IDisposable
 {
     private readonly ConsistentHashRing ring;
-    private readonly Func<string, ICachePeerClient> clientFactory;
+    private readonly Func<string, ICachePeerClient>? clientFactory;
+    private readonly GrpcConnectionPoolOptions? poolOptions;
+    private readonly Action<GrpcChannelOptions>? configureChannel;
+    private readonly ConcurrentDictionary<string, GrpcChannel> channels;
     private readonly Dictionary<string, ICachePeerClient> clients = new(StringComparer.Ordinal);
     private readonly object clientsLock = new();
     private IDisposable? subscription;
@@ -20,7 +26,9 @@ public sealed class PeerManager : IDisposable
 
     /// <summary>
     /// Initializes a new <see cref="PeerManager"/> backed by <paramref name="ring"/> and
-    /// creating peer clients via <paramref name="clientFactory"/>.
+    /// creating peer clients via <paramref name="clientFactory"/> (e.g. in-process gRPC test doubles).
+    /// This constructor does not manage a <see cref="ConcurrentDictionary{TKey, TValue}"/> of channels;
+    /// the factory owns transport construction.
     /// </summary>
     /// <param name="ring">Hash ring to update on peer join/leave events.</param>
     /// <param name="clientFactory">
@@ -33,7 +41,50 @@ public sealed class PeerManager : IDisposable
         ArgumentNullException.ThrowIfNull(clientFactory);
         this.ring = ring;
         this.clientFactory = clientFactory;
+        poolOptions = null;
+        configureChannel = null;
+        channels = new ConcurrentDictionary<string, GrpcChannel>(StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// Initializes a <see cref="PeerManager"/> that reuses a <see cref="GrpcChannel"/> per remote endpoint,
+    /// with keepalive and idle settings from <paramref name="poolOptions"/>.
+    /// </summary>
+    /// <param name="ring">Hash ring to update on peer join/leave events.</param>
+    /// <param name="poolOptions">gRPC connection tuning; if null, defaults are used.</param>
+    /// <param name="configureChannel">Optional per-channel <see cref="GrpcChannelOptions"/> post-configuration.</param>
+    public PeerManager(
+        ConsistentHashRing ring,
+        GrpcConnectionPoolOptions? poolOptions,
+        Action<GrpcChannelOptions>? configureChannel = null)
+    {
+        ArgumentNullException.ThrowIfNull(ring);
+        this.ring = ring;
+        this.poolOptions = poolOptions ?? new GrpcConnectionPoolOptions();
+        this.configureChannel = configureChannel;
+        clientFactory = null;
+        channels = new ConcurrentDictionary<string, GrpcChannel>(StringComparer.Ordinal);
+    }
+
+    /// <summary>
+    /// Gets a snapshot of remote peer endpoint strings (those with a pooled client and channel), for admin and observability.
+    /// Does not include the local node registered only via <see cref="RegisterSelf"/>.
+    /// </summary>
+    public IReadOnlyList<string> Peers
+    {
+        get
+        {
+            lock (clientsLock)
+            {
+                return clients.Keys.ToList();
+            }
+        }
+    }
+
+    /// <summary>When this manager was created with the connection-pool constructor, the underlying channels keyed by remote endpoint. Empty when using the <see cref="PeerManager(ConsistentHashRing, Func{string, ICachePeerClient})"/> constructor.</summary>
+    public IReadOnlyDictionary<string, GrpcChannel> PooledChannels => channels;
+
+    private bool Pooled => clientFactory is null;
 
     /// <summary>
     /// Registers the local node's own endpoint in the ring without creating a client.
@@ -47,7 +98,7 @@ public sealed class PeerManager : IDisposable
     }
 
     /// <summary>
-    /// Adds a remote peer to the ring and creates a client for it.
+    /// Adds a remote peer to the ring and creates a client (and channel when pooled) for it.
     /// No-ops when the endpoint is already tracked.
     /// </summary>
     /// <param name="peer">The peer to add.</param>
@@ -60,13 +111,36 @@ public sealed class PeerManager : IDisposable
                 return;
             }
 
-            ring.AddPeer(peer.Endpoint);
-            clients[peer.Endpoint] = clientFactory(peer.Endpoint);
+            if (Pooled)
+            {
+                string address = GrpcPeerAddress.ToAbsoluteUriString(peer.Endpoint);
+                GrpcChannelOptions options = poolOptions!.BuildGrpcChannelOptions();
+                configureChannel?.Invoke(options);
+                GrpcChannel channel = (poolOptions.CreateChannel
+                    ?? ((a, o) => GrpcChannel.ForAddress(a, o)))(address, options);
+                ICachePeerClient peerClient = GrpcCachePeerClient.FromChannel(channel);
+                ring.AddPeer(peer.Endpoint);
+                channels[peer.Endpoint] = channel;
+                clients[peer.Endpoint] = peerClient;
+            }
+            else
+            {
+                ring.AddPeer(peer.Endpoint);
+                try
+                {
+                    clients[peer.Endpoint] = clientFactory!(peer.Endpoint);
+                }
+                catch
+                {
+                    ring.RemovePeer(peer.Endpoint);
+                    throw;
+                }
+            }
         }
     }
 
     /// <summary>
-    /// Removes a remote peer from the ring and disposes its client.
+    /// Removes a remote peer from the ring and disposes its client and pooled channel.
     /// No-ops when the endpoint is not tracked.
     /// </summary>
     /// <param name="endpoint">The peer endpoint to remove.</param>
@@ -83,6 +157,10 @@ public sealed class PeerManager : IDisposable
 
             ring.RemovePeer(endpoint);
             clients.Remove(endpoint);
+            if (Pooled)
+            {
+                channels.TryRemove(endpoint, out _);
+            }
         }
 
         client.Dispose();
@@ -142,6 +220,10 @@ public sealed class PeerManager : IDisposable
             }
 
             clients.Clear();
+            if (Pooled)
+            {
+                channels.Clear();
+            }
         }
 
         disposed = true;
